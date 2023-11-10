@@ -82,14 +82,15 @@ void setupDHT() {
 
 void setupWaterAlarm() {
   pinMode(PIN_WATER_ALARM, INPUT_PULLUP);
+  s_water = !digitalRead(PIN_WATER_ALARM);
 }
 
 void setupWaterSwitch() {
   pinMode(PIN_WATER_STOP_SWITCH, OUTPUT);
 
   byte waterSwitchSaved = EEPROM.read(EEPROM_ADDR_WATER_STOP_SWITCH);
-  Serial.print("water switch: ");
-  Serial.println(waterSwitchSaved);
+  //Serial.print("water switch: ");
+  //Serial.println(waterSwitchSaved);
   setWaterStopSwitch(waterSwitchSaved);
 }
 
@@ -97,12 +98,12 @@ void setupWaterSwitch() {
 void updateWaterAlarm() {
 
   byte alarmPin = !digitalRead(PIN_WATER_ALARM);
+  digitalWrite(PIN_LED, alarmPin > 0 ? HIGH : LOW);
 
-  if (s_water != alarmPin) {
+  // send report each time if there is water leak detected
+  if (s_water != alarmPin || alarmPin > 0) {
     s_water = alarmPin;
     zunoSendReport(CHANNEL_WATER_ALARM);
-
-    digitalWrite(PIN_LED, s_water > 0 ? HIGH : LOW);
   }
 }
 
@@ -129,7 +130,7 @@ void reportUpdates() {
   bool reportTemperature = (abs(s_temperature - s_temperatureLastReported) > s_temp_threshold);
 
   bool timePassed = (millis() - s_lastReportedTime > (unsigned long) s_temp_hum_interval * 1000);
-  
+
   //Serial.print("time ");
   //Serial.print(s_lastReportedTime);
   //Serial.print(" ");
@@ -171,6 +172,5 @@ void loop() {
   updateWaterAlarm();
   reportUpdates();
 
-  delay(2000);
-
+  delay(3000);
 }
