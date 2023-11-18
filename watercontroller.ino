@@ -11,6 +11,7 @@
 
 // disable legacy sensor making for water leak sensor
 ZUNO_DISABLE(WITH_CC_SENSOR_BINARY);
+ZUNO_ENABLE(MODERN_MULTICHANNEL);
 
 ZUNO_SETUP_CHANNELS(
   ZUNO_SENSOR_MULTILEVEL_TEMPERATURE(s_temperature),
@@ -109,11 +110,7 @@ void updateWaterAlarm() {
 
 void updateDHT() {
   byte result;
-  byte raw_data[5];
-
   result = dht22_sensor.read(true);
-
-  dht22_sensor.getRawData(raw_data);
 
   s_humidity = dht22_sensor.readHumidity();
   s_temperature = dht22_sensor.readTemperature();
