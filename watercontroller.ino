@@ -4,6 +4,8 @@
 #include "ZUNO_DHT.h"
 #include "EEPROM.h"
 
+#define ZUNO_2
+
 #define CHANNEL_TEMPERATURE 1
 #define CHANNEL_HUMIDITY 2
 #define CHANNEL_WATER_ALARM 3
@@ -13,13 +15,35 @@
 ZUNO_DISABLE(WITH_CC_SENSOR_BINARY);
 ZUNO_ENABLE(MODERN_MULTICHANNEL);
 
+byte s_humidity = 0;
+byte s_temperature = 0;
+byte s_water = 0;
+byte s_waterValveBlockSwitch = 0;
+
 ZUNO_SETUP_CHANNELS(
   ZUNO_SENSOR_MULTILEVEL_TEMPERATURE(s_temperature),
   ZUNO_SENSOR_MULTILEVEL_HUMIDITY(s_humidity),
   ZUNO_SENSOR_BINARY_WATER(s_water),
   ZUNO_SWITCH_BINARY(getWaterStopSwitch, setWaterStopSwitch));
 
+enum {
+  CONFIG_TEMPERATURE_HUMIDITY_INTERVAL_SEC = 64,
+  CONFIG_TEMPERATURE_THRESHOLD_DEGREES,
+  CONFIG_HUMIDITY_THRESHOLD_PERCENT
+};
+
+
+#ifdef ZUNO_2
+ZUNO_SETUP_CONFIGPARAMETERS(
+  ZUNO_CONFIG_PARAMETER("Temperature and humidity update period (sec)", 30, 86400, 1800),
+  ZUNO_CONFIG_PARAMETER_1B("Temperature update threshold", 1, 255, 2),
+  ZUNO_CONFIG_PARAMETER_1B("Humidity update threshold", 1, 255, 5));
+
+ZUNO_SETUP_CFGPARAMETER_HANDLER(configParameterChanged2);
+
+#else
 ZUNO_SETUP_CFGPARAMETER_HANDLER(configParameterChanged);
+#endif
 
 #define PIN_WATER_ALARM         9
 #define PIN_WATER_STOP_SWITCH  10
@@ -31,10 +55,6 @@ ZUNO_SETUP_CFGPARAMETER_HANDLER(configParameterChanged);
 // temp & humidity sensor (DHT11)
 DHT dht22_sensor(PIN_DHT, DHT11);
 
-byte s_humidity = 0;
-byte s_temperature = 0;
-byte s_water = 0;
-byte s_waterValveBlockSwitch = 0;
 
 byte s_humidityLastReported = 0;
 byte s_temperatureLastReported = 0;
@@ -56,11 +76,6 @@ void setWaterStopSwitch(byte newValue) {
   EEPROM.write(EEPROM_ADDR_WATER_STOP_SWITCH, s_waterValveBlockSwitch);
 }
 
-enum {
-  CONFIG_TEMPERATURE_HUMIDITY_INTERVAL_SEC = 64,
-  CONFIG_TEMPERATURE_THRESHOLD_DEGREES,
-  CONFIG_HUMIDITY_THRESHOLD_PERCENT
-};
 
 void updateFromCFGParams() {
   s_temp_hum_interval = zunoLoadCFGParam(CONFIG_TEMPERATURE_HUMIDITY_INTERVAL_SEC);
@@ -68,10 +83,19 @@ void updateFromCFGParams() {
   s_hum_threshold = zunoLoadCFGParam(CONFIG_HUMIDITY_THRESHOLD_PERCENT);
 }
 
+#ifdef ZUNO_2
+void configParameterChanged2(byte param, uint32_t value) {
+  zunoSaveCFGParam(param, value);
+  updateFromCFGParams();
+}
+#else
+
 void configParameterChanged(byte param, word value) {
   zunoSaveCFGParam(param, value);
   updateFromCFGParams();
 }
+#endif
+
 
 void setupLED() {
   pinMode(PIN_LED, OUTPUT);
@@ -127,18 +151,19 @@ void reportUpdates() {
   bool reportTemperature = (abs(s_temperature - s_temperatureLastReported) > s_temp_threshold);
 
   bool timePassed = (millis() - s_lastReportedTime > (unsigned long) s_temp_hum_interval * 1000);
-
-  //Serial.print("time ");
-  //Serial.print(s_lastReportedTime);
-  //Serial.print(" ");
-  //Serial.print(s_temp_hum_interval);
-  //Serial.print(" ");
-  //Serial.print(millis());
-  //Serial.print(" ");
-  //Serial.println(timePassed);
+  //Serial.println(millis() - s_lastReportedTime );
 
   if (reportHumidity || reportTemperature || timePassed) {
-    //Serial.print("UPDATE");
+
+    //Serial.print("time ");
+    //Serial.print(s_lastReportedTime);
+    //Serial.print(" ");
+    //Serial.print(s_temp_hum_interval);
+    //Serial.print(" ");
+    //Serial.print(millis());
+    //Serial.print(" ");
+    //Serial.println(timePassed);
+
     //if (timePassed) Serial.println("TIME");
 
     zunoSendReport(CHANNEL_TEMPERATURE);
