@@ -6,14 +6,14 @@
 
 #define ZUNO_2
 
-#define CHANNEL_TEMPERATURE 1
-#define CHANNEL_HUMIDITY 2
-#define CHANNEL_WATER_ALARM 3
-#define CHANNEL_WATER_STOP_SWITCH 4
+#define CHANNEL_WATER_STOP_SWITCH 1
+#define CHANNEL_TEMPERATURE 2
+#define CHANNEL_HUMIDITY 3
+#define CHANNEL_WATER_ALARM 4
 
 // disable legacy sensor making for water leak sensor
 ZUNO_DISABLE(WITH_CC_SENSOR_BINARY);
-ZUNO_ENABLE(MODERN_MULTICHANNEL);
+//ZUNO_ENABLE(MODERN_MULTICHANNEL);
 
 byte s_humidity = 0;
 byte s_temperature = 0;
@@ -21,10 +21,10 @@ byte s_water = 0;
 byte s_waterValveBlockSwitch = 0;
 
 ZUNO_SETUP_CHANNELS(
+  ZUNO_SWITCH_BINARY(getWaterStopSwitch, setWaterStopSwitch),
   ZUNO_SENSOR_MULTILEVEL_TEMPERATURE(s_temperature),
   ZUNO_SENSOR_MULTILEVEL_HUMIDITY(s_humidity),
-  ZUNO_SENSOR_BINARY_WATER(s_water),
-  ZUNO_SWITCH_BINARY(getWaterStopSwitch, setWaterStopSwitch));
+  ZUNO_SENSOR_BINARY_WATER(s_water));
 
 enum {
   CONFIG_TEMPERATURE_HUMIDITY_INTERVAL_SEC = 64,
@@ -53,12 +53,13 @@ ZUNO_SETUP_CFGPARAMETER_HANDLER(configParameterChanged);
 #define EEPROM_ADDR_WATER_STOP_SWITCH 0
 
 // temp & humidity sensor (DHT11)
-DHT dht22_sensor(PIN_DHT, DHT11);
+DHT dht22_sensor(PIN_DHT, DHT22);
 
 
 byte s_humidityLastReported = 0;
 byte s_temperatureLastReported = 0;
-unsigned long s_lastReportedTime = 0;
+unsigned long s_lastReportedTimeTemperature = 0;
+unsigned long s_lastReportedTimeHumidity = 0;
 
 
 word s_temp_hum_interval = 60 * 20; // 20 mins default, min 30 seconds
@@ -136,40 +137,46 @@ void updateDHT() {
   byte result;
   result = dht22_sensor.read(true);
 
-  s_humidity = dht22_sensor.readHumidity();
-  s_temperature = dht22_sensor.readTemperature();
+  if (result == ZunoErrorOk) {
+    s_humidity = dht22_sensor.readHumidity();
+    s_temperature = dht22_sensor.readTemperature();
+  } else {
+
+    s_humidity = -255;
+    s_temperature = -255;
+  }
 }
 
 void resetLastReportedData() {
+
+  unsigned long curMillis = millis();
+
   s_humidityLastReported = s_humidity;
   s_temperatureLastReported = s_temperature;
-  s_lastReportedTime = millis();
+  s_lastReportedTimeTemperature = curMillis;
+  s_lastReportedTimeHumidity = curMillis;
 }
 
 void reportUpdates() {
   bool reportHumidity = (abs(s_humidity - s_humidityLastReported) > s_hum_threshold);
   bool reportTemperature = (abs(s_temperature - s_temperatureLastReported) > s_temp_threshold);
 
-  bool timePassed = (millis() - s_lastReportedTime > (unsigned long) s_temp_hum_interval * 1000);
-  //Serial.println(millis() - s_lastReportedTime );
+  unsigned long curMillis = millis();
+  bool timePassedHumidity = (curMillis - s_lastReportedTimeHumidity > (unsigned long) s_temp_hum_interval * 1000);
+  bool timePassedTemperature = (curMillis - s_lastReportedTimeTemperature > (unsigned long) s_temp_hum_interval * 1000);
 
-  if (reportHumidity || reportTemperature || timePassed) {
-
-    //Serial.print("time ");
-    //Serial.print(s_lastReportedTime);
-    //Serial.print(" ");
-    //Serial.print(s_temp_hum_interval);
-    //Serial.print(" ");
-    //Serial.print(millis());
-    //Serial.print(" ");
-    //Serial.println(timePassed);
-
-    //if (timePassed) Serial.println("TIME");
-
-    zunoSendReport(CHANNEL_TEMPERATURE);
+  if (reportHumidity || timePassedHumidity) {
     zunoSendReport(CHANNEL_HUMIDITY);
-    resetLastReportedData();
+    s_humidityLastReported = s_humidity;
+    s_lastReportedTimeHumidity = curMillis;
   }
+
+  if (reportTemperature || timePassedTemperature) {
+    zunoSendReport(CHANNEL_TEMPERATURE);
+    s_temperatureLastReported = s_temperature;
+    s_lastReportedTimeTemperature = curMillis;
+  }
+
 }
 
 void setup() {
